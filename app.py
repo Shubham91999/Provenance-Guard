@@ -13,9 +13,10 @@ Stretch endpoints:
   GET  /dashboard             minimal HTML analytics view (S3)
 """
 
+import os
 import uuid
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, send_file
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -40,6 +41,12 @@ ATTESTATION_TEXT = (
     "I certify this account's work is my own original human writing."
 )
 MIN_SAMPLE_WORDS = 20
+
+
+@app.route("/", methods=["GET"])
+def index():
+    """Serve the interactive demo frontend."""
+    return send_file(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
 @app.route("/health", methods=["GET"])

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Provenance Guard</title>
+<style>
+  :root {
+    --ai: #c0392b; --ai-bg: #fdecea;
+    --human: #1e824c; --human-bg: #e8f6ee;
+    --uncertain: #b7791f; --uncertain-bg: #fdf6e3;
+    --ink: #1f2933; --muted: #6b7280; --line: #e5e7eb; --brand: #3b4cca;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink); background: #f7f8fa; margin: 0; padding: 32px 16px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  header p { color: var(--muted); margin: 0 0 24px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px;
+          padding: 20px; margin-bottom: 20px; }
+  label { display: block; font-weight: 600; font-size: .85rem; margin: 0 0 6px; }
+  textarea, input, select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 8px; font-size: .95rem; font-family: inherit; color: var(--ink);
+  }
+  textarea { min-height: 140px; resize: vertical; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .row > div { flex: 1; min-width: 180px; }
+  button {
+    background: var(--brand); color: #fff; border: 0; border-radius: 8px;
+    padding: 11px 20px; font-size: .95rem; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.secondary { background: #fff; color: var(--brand); border: 1px solid var(--brand); }
+  .actions { margin-top: 16px; display: flex; gap: 10px; align-items: center; }
+  .hidden { display: none; }
+
+  .verdict { border-radius: 12px; padding: 20px; border: 2px solid; }
+  .verdict.likely_ai { border-color: var(--ai); background: var(--ai-bg); }
+  .verdict.likely_human { border-color: var(--human); background: var(--human-bg); }
+  .verdict.uncertain { border-color: var(--uncertain); background: var(--uncertain-bg); }
+  .verdict h2 { margin: 0 0 8px; font-size: 1.25rem; }
+  .verdict p { margin: 0 0 12px; line-height: 1.5; }
+  .verdict.likely_ai h2 { color: var(--ai); }
+  .verdict.likely_human h2 { color: var(--human); }
+  .verdict.uncertain h2 { color: var(--uncertain); }
+
+  .badge { display: inline-block; background: #0d7d4d; color: #fff;
+           font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+           margin-bottom: 12px; }
+
+  .bar { height: 12px; background: #eceff3; border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
+  .bar > span { display: block; height: 100%; background: linear-gradient(90deg,#1e824c,#b7791f,#c0392b); }
+  .meta { color: var(--muted); font-size: .82rem; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: .9rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  .pill { font-size: .75rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .pill.ai { background: var(--ai-bg); color: var(--ai); }
+  .pill.human { background: var(--human-bg); color: var(--human); }
+  .note { font-size: .82rem; color: var(--muted); margin-top: 10px; }
+  .error { color: var(--ai); font-weight: 600; }
+  .ok { color: var(--human); font-weight: 600; }
+  a.small { font-size: .82rem; color: var(--brand); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🛡️ Provenance Guard</h1>
+    <p>Paste a piece of writing to see how it would be labeled for readers — honestly, with uncertainty.</p>
+  </header>
+
+  <div class="card">
+    <label for="text">Content</label>
+    <textarea id="text" placeholder="Paste a poem, story excerpt, or blog post here…"></textarea>
+    <div class="row">
+      <div>
+        <label for="creator">Creator ID</label>
+        <input id="creator" value="demo-user" />
+      </div>
+      <div>
+        <label for="ctype">Content type</label>
+        <select id="ctype">
+          <option value="text">Text</option>
+          <option value="image_metadata">Image + metadata</option>
+        </select>
+      </div>
+    </div>
+    <div id="metaWrap" class="row hidden">
+      <div>
+        <label for="meta">Image metadata (JSON, e.g. {"software":"Midjourney v6"})</label>
+        <input id="meta" placeholder='{"software": "Midjourney v6"}' />
+      </div>
+    </div>
+    <div class="actions">
+      <button id="analyzeBtn">Analyze</button>
+      <span id="status" class="meta"></span>
+      <a class="small" href="/dashboard" target="_blank" style="margin-left:auto">Analytics dashboard ↗</a>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result" class="card hidden">
+    <div id="verdict" class="verdict">
+      <span id="badge" class="badge hidden"></span>
+      <h2 id="vTitle"></h2>
+      <p id="vBody"></p>
+      <div class="meta">AI-likelihood confidence: <strong id="vConf"></strong></div>
+      <div class="bar"><span id="vBar"></span></div>
+    </div>
+
+    <table>
+      <thead><tr><th>Signal</th><th>Score (AI-likelihood)</th><th>Vote</th></tr></thead>
+      <tbody id="signals"></tbody>
+    </table>
+    <div id="reason" class="note"></div>
+    <div id="metaCheck" class="note"></div>
+
+    <div class="actions">
+      <button id="appealToggle" class="secondary">Disagree? Appeal this result</button>
+    </div>
+    <div id="appealBox" class="hidden" style="margin-top:14px">
+      <label for="appealText">Your reasoning</label>
+      <textarea id="appealText" style="min-height:80px" placeholder="Explain why you believe this classification is wrong…"></textarea>
+      <div class="actions">
+        <button id="appealSubmit">Submit appeal</button>
+        <span id="appealStatus" class="meta"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let currentContentId = null;
+
+  $("ctype").addEventListener("change", (e) => {
+    $("metaWrap").classList.toggle("hidden", e.target.value !== "image_metadata");
+  });
+
+  function pct(x) { return Math.round(x * 100) + "%"; }
+
+  $("analyzeBtn").addEventListener("click", async () => {
+    const text = $("text").value.trim();
+    if (!text) { $("status").textContent = "Please paste some content first."; return; }
+
+    const payload = {
+      text,
+      creator_id: $("creator").value.trim() || "demo-user",
+      content_type: $("ctype").value,
+    };
+    if (payload.content_type === "image_metadata") {
+      const raw = $("meta").value.trim();
+      if (raw) {
+        try { payload.metadata = JSON.parse(raw); }
+        catch { $("status").textContent = "Metadata must be valid JSON."; return; }
+      }
+    }
+
+    $("analyzeBtn").disabled = true;
+    $("status").textContent = "Analyzing…";
+    try {
+      const res = await fetch("/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { $("status").innerHTML = '<span class="error">' + (data.error || res.status) + "</span>"; return; }
+      $("status").textContent = "";
+      renderResult(data);
+    } catch (err) {
+      $("status").innerHTML = '<span class="error">Request failed: ' + err + "</span>";
+    } finally {
+      $("analyzeBtn").disabled = false;
+    }
+  });
+
+  function renderResult(d) {
+    currentContentId = d.content_id;
+    $("result").classList.remove("hidden");
+
+    const v = $("verdict");
+    v.className = "verdict " + d.attribution;
+    $("vTitle").textContent = d.label.title;
+    $("vBody").textContent = d.label.body;
+    $("vConf").textContent = pct(d.confidence) + "  (" + d.attribution + ")";
+    $("vBar").style.width = pct(d.confidence);
+
+    // Verified-human badge
+    const badge = $("badge");
+    if (d.label.creator_badge) {
+      badge.textContent = d.label.creator_badge.text;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+
+    // Signals table
+    const rows = [];
+    const s = d.signals, votes = d.votes ? d.votes.detail : {};
+    const add = (name, key) => {
+      if (s[key] === undefined || s[key] === null) {
+        rows.push(`<tr><td>${name}</td><td class="meta">n/a (degraded)</td><td>—</td></tr>`);
+        return;
+      }
+      const vote = votes[key.replace("_score", "")] || "—";
+      const cls = vote === "ai" ? "ai" : (vote === "human" ? "human" : "");
+      rows.push(`<tr><td>${name}</td><td>${s[key]}</td><td><span class="pill ${cls}">${vote}</span></td></tr>`);
+    };
+    add("LLM (semantic)", "llm_score");
+    add("Stylometric (structural)", "stylometric_score");
+    add("Repetition (redundancy)", "repetition_score");
+    $("signals").innerHTML = rows.join("");
+
+    $("reason").textContent = "Decision logic: " + d.notes.reason +
+      (d.notes.forced_uncertain ? "  ⚠ (safeguard applied)" : "");
+
+    const mc = d.metadata_check;
+    $("metaCheck").textContent = mc
+      ? (mc.declared_ai
+          ? "Image metadata declared AI generation: " + mc.evidence.join("; ")
+          : "Image metadata checked — no AI markers found.")
+      : "";
+
+    // reset appeal box
+    $("appealBox").classList.add("hidden");
+    $("appealText").value = "";
+    $("appealStatus").textContent = "";
+    $("result").scrollIntoView({ behavior: "smooth" });
+  }
+
+  $("appealToggle").addEventListener("click", () => {
+    $("appealBox").classList.toggle("hidden");
+  });
+
+  $("appealSubmit").addEventListener("click", async () => {
+    const reasoning = $("appealText").value.trim();
+    if (!reasoning) { $("appealStatus").textContent = "Please add your reasoning."; return; }
+    if (!currentContentId) return;
+    $("appealSubmit").disabled = true;
+    $("appealStatus").textContent = "Submitting…";
+    try {
+      const res = await fetch("/appeal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content_id: currentContentId, creator_reasoning: reasoning }),
+      });
+      const data = await res.json();
+      if (!res.ok) { $("appealStatus").innerHTML = '<span class="error">' + (data.error || res.status) + "</span>"; return; }
+      $("appealStatus").innerHTML = '<span class="ok">✓ ' + data.status + " — " + data.message + "</span>";
+    } catch (err) {
+      $("appealStatus").innerHTML = '<span class="error">Failed: ' + err + "</span>";
+    } finally {
+      $("appealSubmit").disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

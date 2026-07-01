@@ -48,6 +48,11 @@ pip install -r requirements.txt
 python app.py                      # serves on http://localhost:5000
 ```
 
+Then open **http://localhost:5000/** for the interactive web UI (paste content →
+Analyze → see the color-coded label, confidence bar, per-signal breakdown, and an
+inline appeal form). The same endpoints are also usable directly via `curl` (see
+[API](#api)).
+
 If `GROQ_API_KEY` is missing or the Groq API fails, the system **degrades
 gracefully** to the stylometric signal only and flags the result as `degraded`
 rather than erroring.
@@ -58,6 +63,7 @@ rather than erroring.
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| `GET`  | `/` | Interactive web UI (paste content, analyze, appeal) |
 | `POST` | `/submit` | Classify text (or image metadata). Body: `{ "text", "creator_id", ["content_type", "metadata"] }` |
 | `POST` | `/appeal` | Contest a classification. Body: `{ "content_id", "creator_reasoning" }` |
 | `GET`  | `/log`    | Recent audit-log entries. Optional `?limit=N&status=under_review` |
