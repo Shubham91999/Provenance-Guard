@@ -36,6 +36,16 @@ limiter = Limiter(
 
 storage.init_db()
 
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Return JSON (not the default HTML page) when the rate limit is exceeded."""
+    return jsonify({
+        "error": "Rate limit exceeded. Please slow down and try again shortly.",
+        "limit": config.RATE_LIMIT,
+        "detail": str(getattr(e, "description", "too many requests")),
+    }), 429
+
 # The exact attestation a creator must sign to earn a Verified-Human cert (S2).
 ATTESTATION_TEXT = (
     "I certify this account's work is my own original human writing."

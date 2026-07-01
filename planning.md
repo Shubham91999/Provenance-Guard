@@ -1,9 +1,5 @@
 # Provenance Guard — Planning & System Design
 
-> Written before implementation (Milestones 1–2). This is the canonical spec the
-> implementation is built against, and the reference document used when prompting
-> AI tools to generate code.
-
 ---
 
 ## 1. Problem & Design Philosophy

@@ -145,6 +145,13 @@
 
   function pct(x) { return Math.round(x * 100) + "%"; }
 
+  // Parse a response safely — some errors (e.g. 429) may not be JSON.
+  async function parseResponse(res) {
+    const raw = await res.text();
+    try { return JSON.parse(raw); }
+    catch { return { error: raw || (res.status + " " + res.statusText) }; }
+  }
+
   $("analyzeBtn").addEventListener("click", async () => {
     const text = $("text").value.trim();
     if (!text) { $("status").textContent = "Please paste some content first."; return; }
@@ -170,7 +177,12 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await parseResponse(res);
+      if (res.status === 429) {
+        $("status").innerHTML = '<span class="error">⏳ Rate limit reached (' +
+          (data.limit || "10/min") + '). This is the rate limiter working — wait a minute and try again.</span>';
+        return;
+      }
       if (!res.ok) { $("status").innerHTML = '<span class="error">' + (data.error || res.status) + "</span>"; return; }
       $("status").textContent = "";
       renderResult(data);
@@ -251,7 +263,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content_id: currentContentId, creator_reasoning: reasoning }),
       });
-      const data = await res.json();
+      const data = await parseResponse(res);
       if (!res.ok) { $("appealStatus").innerHTML = '<span class="error">' + (data.error || res.status) + "</span>"; return; }
       $("appealStatus").innerHTML = '<span class="ok">✓ ' + data.status + " — " + data.message + "</span>";
     } catch (err) {
